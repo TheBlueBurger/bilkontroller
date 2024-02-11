@@ -1,0 +1,1 @@
+g++ main.cpp $(sdl2-config --cflags) -l SDL2 -L/opt/homebrew/lib/ -o main
