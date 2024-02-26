@@ -7,7 +7,8 @@
 #include <sys/errno.h>
 #include <fcntl.h>
 #include <unistd.h>
-
+#define bluetooth_serial_name "HC-05"
+#define serial 1
 struct Data {
     uint8_t knapp;
     uint8_t value;
@@ -28,10 +29,11 @@ void assertFail(char* expr, char* file, int line, char* msg) {
 #define assertZeroErrormsg(expr, msg) assert(!(expr), msg);
 // https://blog.mbedded.ninja/programming/operating-systems/linux/linux-serial-ports-using-c-cpp/
 int initTTY() {
-    serialPort = open("/dev/tty.HC-05", O_RDWR);
+    #if serial
+    serialPort = open("/dev/tty." bluetooth_serial_name, O_RDWR);
     fprintf(stderr, "FD: %d\n", serialPort);
     assert(serialPort != -1, "Serieporten kan inte öppnas... Se till att screen inte är öppet");
-    assertZeroErrormsg(tcgetattr(serialPort, &serialConfig), "Kan inte ansluta få serie-configen från hc-05");
+    assertZeroErrormsg(tcgetattr(serialPort, &serialConfig), "Kan inte ansluta få serie-configen från " bluetooth_serial_name);
     // ta bort plarity bitten
     serialConfig.c_cflag &= ~PARENB;
     // stäng av att den försöker att tolka saker som inte ska tolkas
@@ -39,9 +41,12 @@ int initTTY() {
     serialConfig.c_iflag &= ~(IXON | IXOFF | IXANY);
     serialConfig.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL);
     // sätt rätt baud rate (9600)
-    assertZeroErrormsg(cfsetispeed(&serialConfig, B9600), "kan inte sätta input-hastigheten till hc-05");
-    assertZeroErrormsg(cfsetospeed(&serialConfig, B9600), "kan inte sätta output-hastigheten till hc-05");
-    assertZeroErrormsg(tcsetattr(serialPort, TCSANOW, &serialConfig), "kan inte applya settingsen till hc-05");
+    assertZeroErrormsg(cfsetispeed(&serialConfig, B9600), "kan inte sätta input-hastigheten till " bluetooth_serial_name);
+    assertZeroErrormsg(cfsetospeed(&serialConfig, B9600), "kan inte sätta output-hastigheten till " bluetooth_serial_name);
+    assertZeroErrormsg(tcsetattr(serialPort, TCSANOW, &serialConfig), "kan inte applya settingsen till " bluetooth_serial_name);
+    #else
+    serialPort = open("/dev/null", O_WRONLY);
+    #endif
     return 0;
 }
 void sendMagicPacket() {
@@ -50,7 +55,7 @@ void sendMagicPacket() {
 uint8_t latestValues[256];
 void sendEvent(struct Data val) {
     latestValues[val.knapp] = val.value;
-    puts("Skickar data!");
+    //puts("Skickar data!");
     assert(write(serialPort, &val, sizeof(struct Data)) != -1, "kan inte skicka kontrollerdata");
 }
 SDL_Joystick* joystick;
@@ -100,10 +105,10 @@ int main() {
         }
         else if (e.type == SDL_JOYAXISMOTION) {
             if(abs(e.jaxis.value) < 3000) e.jaxis.value = 0;
-            // // skicka inte samma sak igen, hjälper till ifall att kontrollen driftar
             uint8_t binaryValue = (e.jaxis.value/256)+128;
+            // skicka inte samma sak igen, hjälper till ifall att kontrollen driftar
             if(latestValues[e.jaxis.axis] == binaryValue) continue;
-            printf("axis: %i %i\n", e.jaxis.axis, e.jaxis.value);
+            if(e.jaxis.axis == 0) printf("axis: %i %i\n", e.jaxis.axis, binaryValue);
             struct Data data = {
                 .knapp = e.jaxis.axis,
                 .value = binaryValue
